@@ -4,7 +4,7 @@ engine = {}
 require("engine/engine_includes")
 require("game/game_includes")
 
-local _curTime, _prntcnt
+local _curTime, _prntcnt = 0, 0
 local _gameTitle = "LD28"
 
 assertDebug = function() end
@@ -15,8 +15,6 @@ function love.load()
 	-- Disable this on release, removes unnecessary asserts
 	--assertDebug = assert
 	
-	_curTime = 0
-	_prntcnt = 0
 	input = InputController()
 	game.load()
 	
@@ -36,7 +34,7 @@ function love.draw()
 	love.graphics.setBackgroundColor( 30, 30, 40 )
 	love.graphics.clear()
 	game.draw()
-	love.graphics.setCaption(_gameTitle.."  ("..love.timer.getFPS().." fps)")
+	love.window.setTitle(_gameTitle.."  ("..love.timer.getFPS().." fps)")
 	
 end
 

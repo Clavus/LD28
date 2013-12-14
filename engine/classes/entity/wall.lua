@@ -41,7 +41,7 @@ end
 
 function Wall:draw()
 	
-	love.graphics.line(self._body:getWorldPoints(self._shape:getPoints()))
+	--love.graphics.line(self._body:getWorldPoints(self._shape:getPoints()))
 	
 end
 

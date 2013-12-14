@@ -3,11 +3,16 @@ Motorcycle = class("Motorcycle", Entity)
 Motorcycle:include(mixin.PhysicsActor)
 Motorcycle:include(mixin.CollisionResolver)
 
+local wheelTorque = 1000000
+local controlAngularImpulse = 13000
+local boostImpulse = 400
+local chargeDrainPSec = 66
+local chargeRegenPSec = 20
+local chargeRecoveryDelay = 2
+
 function Motorcycle:initialize( world )
 	
 	Entity.initialize(self)
-	
-	
 	
 	self._img_frame = Sprite({
 			image = resource.getImage(FOLDER.ASSETS.."m_frame.png"),
@@ -31,7 +36,17 @@ function Motorcycle:initialize( world )
 	
 	self:initializeBody( world )
 	
-	print("Created motorcycle")
+	self.maxCharge = 100
+	self.charge = 100
+	self.chargeRegenStart = 0
+	
+	gui:addDynamicElement(0, Vector(0,0), function()
+		love.graphics.setColor( 100, 100, 100 )
+		love.graphics.rectangle( "fill", 0, 0, 200, 50 )
+		love.graphics.setColor( 250, 50, 50 )
+		love.graphics.rectangle( "fill", 0, 0, 200 * (self.charge / self.maxCharge), 50 )
+	end, "charge")
+	
 	
 end
 
@@ -54,26 +69,36 @@ function Motorcycle:initializeBody( world )
 	self._wheelfixture:setFriction( 20 )
 	--self._wheelfixture:setUserData(self)
 	
-	local av = Vector(-5, 52):getNormal()
-	
 	self._joint = love.physics.newRevoluteJoint( self._body, self._wheelbody, wx, wy, false )
-	--self._joint1 = love.physics.newDistanceJoint( self._body, self._wheelbody, 0, 0, 0, 0, false )
-	--self._joint2 = love.physics.newPrismaticJoint( self._body, self._wheelbody, 0, 0, av.x, av.y, false )
-	--self._joint2 = love.physics.newWeldJoint( self._body, self._wheelbody, 0, 0, false )
-	
+
 end
 
 function Motorcycle:update( dt )
 	
-	self._wheelbody:applyTorque( 1000000 * dt )
+	self._wheelbody:applyTorque( wheelTorque * dt )
 	
 	if (input:keyIsDown("left")) then
-		self._body:applyAngularImpulse( -10000 * dt )
+		self._body:applyAngularImpulse( -1 * controlAngularImpulse * dt )
 	end
 	
 	if (input:keyIsDown("right")) then
-		self._body:applyAngularImpulse( 10000 * dt )
+		self._body:applyAngularImpulse( controlAngularImpulse * dt )
 	end
+	
+	if (input:keyIsDown(" ") and self.charge > 0) then
+		local vec = angle.forward( self._body:getAngle() ) * (boostImpulse * dt)
+		self._body:applyLinearImpulse( vec.x, vec.y )
+		
+		self.charge = math.max(0, self.charge - chargeDrainPSec * dt)
+		
+		self.chargeRegenStart = engine.currentTime() + chargeRecoveryDelay
+		
+	elseif (self.chargeRegenStart < engine.currentTime()) then
+		
+		self.charge = math.min(self.maxCharge, self.charge + chargeRegenPSec * dt)
+		
+	end	
+	
 	
 end
 

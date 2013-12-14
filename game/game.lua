@@ -3,11 +3,14 @@ function game.load()
 	
 	local ldata = TiledLevelData(FOLDER.ASSETS.."level1")
 	ldata.physics.pixels_per_meter = 100
-	level = Level(ldata, true)
+	
 	gui = GUI()
+	level = Level(ldata, true)
+	
+	--level:getCamera():setScale( 0.5, 0.5 )
 	
 	world = level:getPhysicsWorld()
-	world:setGravity(0, 200)
+	world:setGravity(0, 300)
 	
 	print("Game initialized")
 	
@@ -22,6 +25,9 @@ function game.update( dt )
 	
 	gui:update( dt )
 	level:update( dt )
+	
+	if (input:keyIsPressed("r")) then love.load() return end
+	if (input:keyIsPressed("escape")) then love.event.quit() return end
 	
 end
 
@@ -62,6 +68,9 @@ function game.createLevelEntity( level, entData )
 		ent:setPos(entData.x, entData.y)
 		
 		player = ent
+		
+		ent = level:createEntity("LostWheel", level:getPhysicsWorld())
+		ent:setPos(entData.x - 200, entData.y - 200)
 		
 	end
 	

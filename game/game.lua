@@ -3,7 +3,9 @@ function game.load()
 	
 	level = Level(LevelData(), false)
 	gui = GUI()
-
+	
+	motorcycle = level:createEntity("Motorcycle")
+	
 	print("Game initialized")
 	
 end

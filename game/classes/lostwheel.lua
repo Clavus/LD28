@@ -27,6 +27,7 @@ function LostWheel:initializeBody( world )
 	self._fixture = love.physics.newFixture(self._body, self._shape)
 	self._fixture:setFriction( 1 )
 	self._fixture:setRestitution( 0.8 )
+	self._fixture:setUserData(self)
 	
 end
 

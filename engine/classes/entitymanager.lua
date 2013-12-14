@@ -56,7 +56,8 @@ end
 function EntityManager:update( dt )
 	
 	for k, v in ipairs( self._entities ) do
-		v:update( dt )
+		local mul = v:getUpdateRateMultiplier() or 1
+		v:update( dt * mul )
 	end
 	
 end

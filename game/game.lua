@@ -6,8 +6,11 @@ function game.load()
 	
 	gui = GUI()
 	level = Level(ldata, true)
-	
-	--level:getCamera():setScale( 0.5, 0.5 )
+	level:setCollisionCallbacks(game.collisionBeginContact, game.collisionEndContact, game.collisionPreSolve, game.collisionPostSolve)
+
+	if (player) then
+		level:getCamera():track( player, love.graphics.getWidth() / 5, -(love.graphics.getHeight() / 5) )
+	end
 	
 	world = level:getPhysicsWorld()
 	world:setGravity(0, 300)
@@ -17,12 +20,7 @@ function game.load()
 end
 
 function game.update( dt )
-	
-	if (player) then
-		local px, py = player:getPos() 
-		level:getCamera():setPos( px + love.graphics.getWidth() / 4, py )
-	end
-	
+
 	gui:update( dt )
 	level:update( dt )
 	
@@ -80,33 +78,67 @@ function game.collisionBeginContact(a, b, contact)
 	
 	--print("begin contact "..tostring(a:getUserData()).." -> "..tostring(a:getUserData()))
 	local ao, bo = a:getUserData(), b:getUserData()
-	--print("coll "..tostring(ao).." - "..tostring(bo))
-	--print("ao: "..tostring(ao.class)..", incl: "..tostring(includes(CollisionResolver, ao.class)))
 	
-	if (includes(CollisionResolver, ao.class)) then
-		ao:resolveCollisionWith(bo, contact)
+	if (not ao or not bo) then return end
+	
+	--print("coll "..tostring(ao).." - "..tostring(bo))
+	--print("ao: "..tostring(ao.class)..", incl: "..tostring(includes(mixin.CollisionResolver, ao.class)))
+	--print("bo: "..tostring(bo.class)..", incl: "..tostring(includes(mixin.CollisionResolver, bo.class)))
+	
+	if (ao and includes(mixin.CollisionResolver, ao.class)) then
+		ao:beginContactWith(bo, contact, true)
 	end
 
-	if (includes(CollisionResolver, bo.class)) then
-		bo:resolveCollisionWith(ao, contact)
+	if (bo and includes(mixin.CollisionResolver, bo.class)) then
+		bo:beginContactWith(ao, contact, false)
 	end
-	
-	--if (instanceOf(, ao) and instanceOf(RPGPlayer, bo)) then
-	--	ao:attackPlayer(bo)
-	--elseif (instanceOf(Zombie, bo) and instanceOf(RPGPlayer, ao)) then
-	--	bo:attackPlayer(ao)
-	--end
 	
 end
 
 function game.collisionEndContact(a, b, contact)
 
+	local ao, bo = a:getUserData(), b:getUserData()
+	
+	if (not ao or not bo) then return end
+	
+	if (ao and includes(mixin.CollisionResolver, ao.class)) then
+		ao:endContactWith(bo, contact, true)
+	end
+
+	if (bo and includes(mixin.CollisionResolver, bo.class)) then
+		bo:endContactWith(ao, contact, false)
+	end
+	
 end
 
 function game.collisionPreSolve(a, b, contact)
 
+	local ao, bo = a:getUserData(), b:getUserData()
+	
+	if (not ao or not bo) then return end
+	
+	if (ao and includes(mixin.CollisionResolver, ao.class)) then
+		ao:preSolveWith(bo, contact, true)
+	end
+
+	if (bo and includes(mixin.CollisionResolver, bo.class)) then
+		bo:preSolveWith(ao, contact, false)
+	end
+	
 end
 
 function game.collisionPostSolve(a, b, contact)
 
+	local ao, bo = a:getUserData(), b:getUserData()
+	
+	if (not ao or not bo) then return end
+	
+	if (ao and includes(mixin.CollisionResolver, ao.class)) then
+		ao:postSolveWith(bo, contact, true)
+	end
+
+	if (bo and includes(mixin.CollisionResolver, bo.class)) then
+		bo:postSolveWith(ao, contact, false)
+	end
+	
 end

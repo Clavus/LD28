@@ -31,7 +31,7 @@ end
 
 function love.draw()
 	
-	love.graphics.setBackgroundColor( 30, 30, 40 )
+	love.graphics.setBackgroundColor( 160, 240, 255 )
 	love.graphics.clear()
 	game.draw()
 	love.window.setTitle(_gameTitle.."  ("..love.timer.getFPS().." fps)")

@@ -4,9 +4,11 @@ Motorcycle:include(mixin.PhysicsActor)
 Motorcycle:include(mixin.CollisionResolver)
 
 local wheel_x, wheel_y = -38, 38
-local wheelTorque = 700000
+local wheelTorque = 1200000
+local wheelMaxAngularVelocity = 25
 local controlAngularImpulse = 8000
-local boostImpulse = 400
+local maxAngularVelocity = 4
+local boostImpulse = 500
 local chargeDrainPSec = 300
 local chargeRegenPSec = 400
 local chargeRecoveryDelay = 3
@@ -37,30 +39,39 @@ function Motorcycle:initialize( world )
 	
 	self:initializeBody( world )
 	
-	self.maxHealth = 1000
-	self.health = 1000
+	self.maxHealth = 500
+	self.health = 500
 	
 	self.maxCharge = 100
 	self.charge = 100
 	self.chargeRegenStart = 0
 	
+	self._sound_boost = resource.getSound( FOLDER.ASSETS.."boost.wav", "static" )
+	self._sound_hit = resource.getSound( FOLDER.ASSETS.."hit.wav", "static" )
+	self._sound_hit:setVolume(0.5)
+	
 	self._lastGroundContact = 0
-
+	self._trickstage = 0
+	self._resettrickstage =  0
+	self._tricktexts = { "SICKNASTY", "TOTALLY RAD", "AMAZING", "AWESOME", "RADICAL", "STUPENDOUS", "HOLY F@(#", "MAJESTIC", "11/10 - IGN",
+	"SICKNASTY", "TOTALLY RAD", "AMAZING", "AWESOME", "RADICAL", "STUPENDOUS", "HOLY F@(#", "MAJESTIC", "11/10 - IGN",
+	"MEH", "HELP I'M STUCK IN A TRICK SLANG TYPING FACTORY" }
+	
 	-- initial push
 	self._body:applyLinearImpulse( 250, -230 )
 	
-	gui:addDynamicElement(0, Vector(0,0), function()
+	--[[gui:addDynamicElement(0, Vector(0,0), function()
 		love.graphics.setColor( 100, 100, 100 )
 		love.graphics.rectangle( "fill", 0, 0, 200, 30 )
 		love.graphics.setColor( 50, 250, 50 )
 		love.graphics.rectangle( "fill", 0, 0, 200 * (self.health / self.maxHealth), 30 )
-	end, "charge")
+	end, "charge")]]--
 	
 	gui:addDynamicElement(0, Vector(0,0), function()
 		love.graphics.setColor( 100, 100, 100 )
-		love.graphics.rectangle( "fill", 0, 40, 200, 30 )
+		love.graphics.rectangle( "fill", 5, 5, 200, 28 )
 		love.graphics.setColor( 250, 50, 50 )
-		love.graphics.rectangle( "fill", 0, 40, 200 * (self.charge / self.maxCharge), 30 )
+		love.graphics.rectangle( "fill", 7, 7, 196 * (self.charge / self.maxCharge), 24 )
 	end, "charge")
 	
 	-- Create particle systems
@@ -70,7 +81,7 @@ function Motorcycle:initialize( world )
 	system:setBufferSize( 2000 )
 	system:setEmissionRate( 300 )
 	system:setEmitterLifetime( -1 )
-	system:setParticleLifetime( 1, 1 )
+	system:setParticleLifetime( 0.1, 0.3 )
 	system:setColors( 255, 100, 0, 50, 255, 255, 0, 100 )
 	system:setSizes( 0.3, 1.8, 0.3 )
 	system:setSpeed( 200, 700  )
@@ -124,6 +135,25 @@ function Motorcycle:initialize( world )
 	
 	self._psystem_smoke = system
 	
+	local system = love.graphics.newParticleSystem( resource.getImage(FOLDER.ASSETS.."fire.png"), 160 )
+	system:setOffset( 0, 0 )
+	system:setBufferSize( 2000 )
+	system:setEmissionRate( 100 )
+	system:setEmitterLifetime( -1 )
+	system:setParticleLifetime( 0.1, 0.3 )
+	system:setColors( 255, 100, 0, 50, 255, 255, 0, 100 )
+	system:setSizes( 0.3, 1.8, 0.3 )
+	system:setSpeed( 30, 80  )
+	system:setDirection( math.rad(130) )
+	system:setSpread( math.rad(3) )
+	system:setRotation( math.rad(0), math.rad(0) )
+	system:setSpin( math.rad(0.5), math.rad(1), 1 )
+	system:setRadialAcceleration( 0 )
+	system:setTangentialAcceleration( 0 )
+	system:stop()
+	
+	self._psystem_enginefire = system
+	
 end
 
 function Motorcycle:initializeBody( world )
@@ -142,7 +172,7 @@ function Motorcycle:initializeBody( world )
 	self._wheelshape = love.physics.newCircleShape( 30 )
 	self._wheelfixture = love.physics.newFixture(self._wheelbody, self._wheelshape)
 	self._wheelfixture:setFriction( 20 )
-	--self._wheelfixture:setUserData(self)
+	self._wheelfixture:setUserData(self)
 	
 	self._joint = love.physics.newRevoluteJoint( self._body, self._wheelbody, wheel_x, wheel_y, false )
 
@@ -156,6 +186,13 @@ function Motorcycle:reset()
 	
 	self._wheelbody:setLinearVelocity( 0, 0 )
 	self._wheelbody:setAngularVelocity( 10 )
+	
+	self.health = self.maxHealth
+	self._psystem_smoke:setEmissionRate( 0 )
+	self._psystem_enginefire:stop()
+	
+	self._trickstage = 0
+	self._boost = false
 	
 end
 
@@ -178,12 +215,41 @@ function Motorcycle:update( dt )
 		self._body:applyAngularImpulse( controlAngularImpulse * dt )
 	end
 	
-	local body_ang = self._body:getAngle()
-	local bx, by = self._body:getPosition()
-		
-	if (input:keyIsDown(" ") and self.charge > 0) then
+	-- clamp angular velocity
+	self._body:setAngularVelocity(math.clamp(self._body:getAngularVelocity(), -maxAngularVelocity, maxAngularVelocity))
+	self._wheelbody:setAngularVelocity(math.clamp(self._wheelbody:getAngularVelocity(), -wheelMaxAngularVelocity, wheelMaxAngularVelocity))
 	
-		-- Boost!
+	local body_ang = math.normalizeAngle( self._body:getAngle() )
+	local bx, by = self._body:getPosition()
+	
+	--print("body: "..body_ang)
+	
+	-- Check sicknasty tricks
+	if (self._resettrickstage < engine.currentTime()) then
+		self._trickstage = 0
+	end
+	
+	if (self._trickstage == 0 and body_ang < math.rad(-90) and body_ang > math.rad(-180)) then
+		self._trickstage = 1
+		self._resettrickstage = engine.currentTime() + 2
+	elseif (self._trickstage == 1 and body_ang < math.rad(100) and body_ang > math.rad(10)) then
+		self._trickstage = 2
+		self._resettrickstage = engine.currentTime() + 2
+	elseif (self._trickstage == 2 and body_ang < 0 and body_ang > math.rad(-90)) then
+		-- looping completed
+		game.trickCompleted( 1000, table.random(self._tricktexts) )
+		self._trickstage = 0
+		self._resettrickstage = 0
+	end
+	
+	-- Boosting
+	if (input:keyIsPressed(" ") and self.charge == self.maxCharge) then
+		self._sound_boost:play()
+		self._boost = true
+	end
+	
+	if (self._boost) then
+	
 		local vec = angle.forward( body_ang - math.pi / 8 ) * (boostImpulse * dt)
 		self._body:applyLinearImpulse( vec.x, vec.y )
 		
@@ -195,6 +261,10 @@ function Motorcycle:update( dt )
 		self._psystem_boost:setDirection( self._body:getAngle() + math.pi )
 		self._psystem_boost:setPosition( bx + ppos.x, by + ppos.y )
 		self._psystem_boost:start()
+		
+		if (self.charge <= 0) then
+			self._boost = false
+		end
 		
 	else
 		
@@ -208,18 +278,22 @@ function Motorcycle:update( dt )
 		
 	end
 	
+	-- Stop ground hit sparks and sounds
 	if (self._lastGroundContact < engine.currentTime() - 0.1) then
 		
+		self._sound_hit:stop()
 		self._psystem_sparks:pause()
 		
 	end
 	
 	local spos = Vector(20, 17):rotate(body_ang)
 	self._psystem_smoke:setPosition( bx + spos.x, by + spos.y )
+	self._psystem_enginefire:setPosition( bx + spos.x, by + spos.y )
 	
 	self._psystem_boost:update(dt)
 	self._psystem_sparks:update(dt)
 	self._psystem_smoke:update(dt)
+	self._psystem_enginefire:update(dt)
 	
 end
 
@@ -244,6 +318,7 @@ function Motorcycle:draw()
 	love.graphics.pop()
 	
 	love.graphics.draw(self._psystem_smoke, 0, 0)
+	love.graphics.draw(self._psystem_enginefire, 0, 0)
 	love.graphics.draw(self._psystem_sparks, 0, 0)
 	
 	--love.graphics.circle("line", wx, wy, self._wheelshape:getRadius(), 32)
@@ -251,30 +326,53 @@ function Motorcycle:draw()
 	
 end
 
-function Motorcycle:postSolveWith( other, contact, selfIsFirst )
+function Motorcycle:postSolveWith( other, contact, myFixture, otherFixture, selfIsFirst )
 	
 	--print("Resolving collision with "..tostring(other))
 	
 	if (instanceOf( Wall, other )) then
 		
-		local nx, ny = contact:getNormal()
-		local p1x, p1y, p2x, p2y = contact:getPositions()
+		if (myFixture == self._fixture) then -- body collides with ground
 		
-		if (selfIsFirst) then nx, ny = nx * -1, ny * -1 end
+			local nx, ny = contact:getNormal()
+			local p1x, p1y, p2x, p2y = contact:getPositions()
+			
+			if (selfIsFirst) then nx, ny = nx * -1, ny * -1 end
+			
+			self._psystem_sparks:setDirection( Vector(nx, ny):angle() )
+			self._psystem_sparks:setPosition( p1x, p1y )
+			self._psystem_sparks:start()
+			
+			-- determine how many sparks to show
+			local nsparks = math.floor(Vector(self._body:getLinearVelocity()):length() / 50)
+			if (nsparks > 0) then
+				self._psystem_sparks:emit( nsparks )
+				self.health = math.max(0, self.health - (nsparks / 10))
+				self._psystem_smoke:setEmissionRate( math.floor(math.max(0, (self.maxHealth * 2/3) - self.health) / 30) )
+				
+				self._sound_hit:play()
+				
+				self._trickstage = 0
+				
+				if (self.health < self.maxHealth * 0.2) then
+					self._psystem_enginefire:start()
+				end
+				
+				if (self.health <= 0) then
+					timer.simple(0, function()
+						game.playerExplode()
+					end)
+				end
+				
+			end
+			
+			self._lastGroundContact = engine.currentTime()
+			
+		elseif (myFixture == self._wheelfixture) then -- wheel collides with ground
 		
-		self._psystem_sparks:setDirection( Vector(nx, ny):angle() )
-		self._psystem_sparks:setPosition( p1x, p1y )
-		self._psystem_sparks:start()
-		
-		-- determine how many sparks to show
-		local nsparks = math.floor(Vector(self._body:getLinearVelocity()):length() / 50)
-		if (nsparks > 0) then
-			self._psystem_sparks:emit( nsparks )
-			self.health = math.max(0, self.health - (nsparks / 10))
-			self._psystem_smoke:setEmissionRate( math.floor(math.max(0, (self.maxHealth * 2/3) - self.health) / 30) )
+			self._trickstage = 0
+			
 		end
-		
-		self._lastGroundContact = engine.currentTime()
 		
 	end
 	

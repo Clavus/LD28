@@ -28,7 +28,7 @@ function Trigger:buildFromPolygon(pol)
 	
 end
 
-function Trigger:beginContactWith( other, contact )
+function Trigger:beginContactWith( other, contact, myFixture, otherFixture, selfIsFirst )
 	
 	contact:setEnabled( false )
 	

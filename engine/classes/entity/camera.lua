@@ -19,6 +19,11 @@ function Camera:initialize()
 	self._easingamplitude = 10
 	self._easingperiod = 1
 	
+	self._clamp_x1 = nil
+	self._clamp_y1 = nil
+	self._clamp_x2 = nil
+	self._clamp_y2 = nil
+	
 	self._targetscale = Vector(1,1)
 	self._scalespeed = 1
 	
@@ -52,6 +57,23 @@ function Camera:update(dt)
 	self._scale.x = math.approach(self._scale.x, self._targetscale.x, self._scalespeed*dt)
 	self._scale.y = math.approach(self._scale.y, self._targetscale.y, self._scalespeed*dt)
 	
+	-- clamp
+	if (self._clamp_x1) then
+		self._pos.x = math.max( self._pos.x, self._clamp_x1 + self:getWidth() / 2 / self._scale.x )
+	end
+	
+	if (self._clamp_x2) then
+		self._pos.x = math.min( self._pos.x, self._clamp_x2 - self:getWidth() / 2 / self._scale.x )
+	end
+	
+	if (self._clamp_y1) then
+		self._pos.y = math.max( self._pos.y, self._clamp_y1 + self:getHeight() / 2 / self._scale.y )
+	end
+	
+	if (self._clamp_y2) then
+		self._pos.y = math.min( self._pos.y, self._clamp_y2 - self:getHeight() / 2 / self._scale.y )
+	end
+	
 end
 
 function Camera:getTargetPos()
@@ -62,6 +84,15 @@ function Camera:getTargetPos()
 		return self._trackent:getCameraTrackingPos()
 	end
 	
+end
+
+function Camera:setClampArea( x1, y1, x2, y2 )
+
+	self._clamp_x1 = x1
+	self._clamp_y1 = y1
+	self._clamp_x2 = x2
+	self._clamp_y2 = y2
+
 end
 
 function Camera:track( ent, rel_x, rel_y )

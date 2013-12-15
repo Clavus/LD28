@@ -7,7 +7,7 @@ function GUI:initialize()
 
 	self._angle = 0
 	self._scale = Vector(1,1)
-	self._pos = Vector(0,0,0)
+	self._pos = Vector(0,0)
 	
 end
 

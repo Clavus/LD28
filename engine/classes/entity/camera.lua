@@ -229,9 +229,3 @@ function Camera:setEasing( func, amp, period )
 	
 end
 
-function Camera:getPos()
-	
-	return math.round(self._pos.x), math.round(self._pos.y)
-	
-end
-

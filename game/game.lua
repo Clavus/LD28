@@ -12,25 +12,17 @@ function game.load()
 	
 	local start_explo = resource.getSound( FOLDER.ASSETS.."start_explosion.wav", "static" )
 	
-	timer.simple( 0.5, function()
-		start_explo:play()
-	end)
-	
-	timer.simple( 3, function()
-		level:getCamera():track( player, love.graphics.getWidth() / 5, 0 )
-		
-		local px, py = player:getPos()
-		game.nextScoreX =  px + 10
-	end)
-	
 	game.last_checkpoint = nil
 	
+	game.font_title = love.graphics.newFont( FOLDER.ASSETS.."loaded.ttf", 108)
 	game.font_score = love.graphics.newFont( FOLDER.ASSETS.."loaded.ttf", 32)
 	game.score = 0
-	game.nextScoreX = nil
+	game.nextScoreX = 100000 -- temp value
 	
 	game.font_text = love.graphics.newFont( FOLDER.ASSETS.."loaded.ttf", 24)
 	game.font_stext = love.graphics.newFont( FOLDER.ASSETS.."loaded.ttf", 12)
+	
+	game.background_img = resource.getImage( FOLDER.ASSETS.."background.png" )
 	
 	world = level:getPhysicsWorld()
 	world:setGravity(0, 300)
@@ -41,8 +33,50 @@ function game.load()
 	gui:addDynamicElement(0, Vector(0,0), function()
 		love.graphics.setFont( game.font_score )
 		love.graphics.setColor( 255, 255, 255, 255 )
-		love.graphics.print( tostring(game.score), 10, 80 )
+		love.graphics.print( tostring(game.score), 10, 50 )
 	end, "score")
+	
+	gui:addDynamicElement(0, Vector(0,0), function()
+		love.graphics.setFont( game.font_stext )
+		love.graphics.setColor( 255, 255, 255, 255 )
+		love.graphics.printf( "Press r to retry", 0, 0, love.graphics.getWidth(), "right" )
+	end, "r_to_restart")
+	
+	-- intro sequence
+	game.paused = false
+	game.level_started = false
+	game.level_ended = false
+	
+	timer.simple( 0.5, function()
+		start_explo:play()
+	end)
+	
+	timer.simple( 2.5, function()
+		game.paused = true
+		
+		gui:addDynamicElement(0, Vector(0,0), function()
+			local win_w, win_h = love.graphics.getWidth(), love.graphics.getHeight()
+		
+			love.graphics.setColor( 0, 0, 0, 150 )
+			love.graphics.rectangle( "fill", 0, win_h / 2 - 100, win_w, 200 )
+		
+			love.graphics.setFont( game.font_title )
+			love.graphics.setColor( 255, 255, 255, 255 )
+			love.graphics.printf( "WHEELIE", 0, win_h / 2 - 75, 1000, "center" )
+			
+			love.graphics.setFont( game.font_text )
+			love.graphics.printf( "Left and right arrow keys to balance. Spacebar to boost.", 0, win_h / 2 + 20, 1000, "center" )
+			
+			love.graphics.printf( "Press space to start", 0, win_h / 2 + 60, 1000, "center" )
+		end, "game_start")
+		
+		level:getCamera():track( player, love.graphics.getWidth() / 5, 0 )
+		
+		player:balance()
+		
+		local px, py = player:getPos()
+		game.nextScoreX =  px + 10
+	end)
 	
 	print("Game initialized")
 	
@@ -50,25 +84,46 @@ end
 
 function game.update( dt )
 
-	if (input:keyIsPressed("r")) then
+	if (input:keyIsPressed("r") and game.level_started and not game.level_ended) then
 		game.resetPlayer()
 	end
 	
 	if (input:keyIsPressed("escape")) then love.event.quit() return end
 	
-	gui:update( dt )
-	level:update( dt )
-	
-	-- update score as player progresses
-	if (game.nextScoreX) then
+	if (input:keyIsPressed(" ") and game.paused) then
 		
-		local px, py = player:getPos()
-		
-		while (px > game.nextScoreX) do
-			game.addScore( 1 )
-			game.nextScoreX = game.nextScoreX + 10
+		if not game.level_started then
+			game.level_started = true
+			gui:removeElement("game_start")
 		end
 		
+		if game.level_ended then
+		
+			game.level_ended = false
+			gui:removeElement("game_end")
+			
+			love.event.quit()
+			
+			-- TODO: next level?
+		end
+		
+		input:clear()
+		game.paused = false
+		
+	end
+	
+	gui:update( dt )
+	
+	if not game.paused then
+		level:update( dt )
+	end
+	
+	-- update score as player progresses
+	local px, py = player:getPos()
+	
+	while (px > game.nextScoreX) do
+		game.addScore( 1 )
+		game.nextScoreX = game.nextScoreX + 10
 	end
 	
 end
@@ -79,6 +134,11 @@ function game.draw()
 	love.graphics.line(0,0,100,0)
 	love.graphics.line(0,0,0,100)]]--
 	love.graphics.setColor(255,255,255,255)
+	
+	local cx, cy = level:getCamera():getPos()
+	love.graphics.setDefaultFilter( "nearest", "nearest" )
+	love.graphics.draw( game.background_img, -cx * 0.1, -cy * 0.05, 0, 2.5, 2.5 )
+	
 	level:draw( dt )
 	gui:draw()
 	
@@ -89,26 +149,64 @@ function game.handleTrigger( trigger, other, contact, trigger_type, ...)
 	
 	if (other == player) then
 		if (trigger_type == "checkpoint") then
-			print("Reached checkpoint")
+		
 			game.last_checkpoint = trigger
 			return true
+			
 		elseif (trigger_type == "reset") then
+		
 			timer.simple(0, function() -- can't reset player in beginContact callback of trigger, so we do it next frame
-				game.resetPlayer()
+				game.playerExplode()
 			end)
 			return true
+			
+		elseif (trigger_type == "finish") then
+			
+			player:turnEngineOff()
+			player.health = 10000
+			
+			timer.simple(1, function()
+				
+				game.level_ended = true
+				game.paused = true
+				
+				gui:addDynamicElement(0, Vector(0,0), function()
+					local win_w, win_h = love.graphics.getWidth(), love.graphics.getHeight()
+				
+					love.graphics.setColor( 0, 0, 0, 150 )
+					love.graphics.rectangle( "fill", 0, win_h / 2 - 100, win_w, 200 )
+				
+					love.graphics.setFont( game.font_title )
+					love.graphics.setColor( 255, 255, 255, 255 )
+					love.graphics.printf( "FINISH!", 0, win_h / 2 - 75, 1000, "center" )
+					
+					love.graphics.setFont( game.font_text )
+					love.graphics.printf( "You completed the course with "..game.score.." points!", 0, win_h / 2 + 20, 1000, "center" )
+					
+					love.graphics.printf( "Press space to exit", 0, win_h / 2 + 60, 1000, "center" )
+				end, "game_end")
+				
+			end)
+			
+			return true
+			
 		end
+		
 	end
 	
 end
 
 function game.addScore( score )
 	
+	if (game.level_ended) then return end
+	
 	game.score = game.score + math.floor(score)
 	
 end
 
 function game.trickCompleted( scoreToAdd, textToDisplay )
+	
+	if (game.level_ended) then return end
 	
 	game.sound_trick:play()
 	game.addScore( scoreToAdd )
@@ -150,7 +248,13 @@ function game.resetPlayer()
 	
 	game.score = 0
 	game.nextScoreX =  cx + 32 + 10
+	
+	for k, v in pairs(level:getEntitiesByClass(Coin)) do
 		
+		v:reset()
+		
+	end
+	
 end
 
 -- called upon map load, handle Tiled objects
@@ -168,9 +272,9 @@ function game.createLevelEntity( level, entData )
 		
 		ent:setPos(entData.x, entData.y)
 	
-	elseif entData.type == "Checkpoint" then
+	elseif entData.type == "Checkpoint" or entData.type == "Reset" or entData.type == "Finish" then
 	
-		ent = level:createEntity("Trigger", level:getPhysicsWorld(), { type = "checkpoint" })
+		ent = level:createEntity("Trigger", level:getPhysicsWorld(), { type = string.lower(entData.type) })
 		if entData.w == nil then
 			ent:buildFromPolygon(entData.polygon)
 		else
@@ -179,17 +283,6 @@ function game.createLevelEntity( level, entData )
 		
 		ent:setPos(entData.x, entData.y)
 	
-	elseif entData.type == "Reset" then
-	
-		ent = level:createEntity("Trigger", level:getPhysicsWorld(), { type = "reset" })
-		if entData.w == nil then
-			ent:buildFromPolygon(entData.polygon)
-		else
-			ent:buildFromSquare(entData.w,entData.h)
-		end
-		
-		ent:setPos(entData.x, entData.y)
-		
 	elseif entData.type == "PlayerStart" then
 		
 		ent = level:createEntity("Motorcycle", level:getPhysicsWorld())
@@ -208,7 +301,12 @@ function game.createLevelEntity( level, entData )
 	elseif entData.type == "Box" then
 		
 		ent = level:createEntity(entData.type, level:getPhysicsWorld(), entData.properties)
-		ent:setPos(entData.x - entData.w / 2, entData.y - entData.h / 2)
+		ent:setPos(entData.x + entData.w / 2, entData.y + entData.h / 2)
+		
+	elseif entData.type == "Pickup" then
+		
+		ent = level:createEntity("Coin", level:getPhysicsWorld(), entData.properties)
+		ent:setPos(entData.x, entData.y)
 		
 	end
 	

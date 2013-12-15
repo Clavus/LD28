@@ -4,9 +4,9 @@ Motorcycle:include(mixin.PhysicsActor)
 Motorcycle:include(mixin.CollisionResolver)
 
 local wheel_x, wheel_y = -38, 38
-local wheelTorque = 1200000
+local wheelTorque = 1600000
 local wheelMaxAngularVelocity = 25
-local controlAngularImpulse = 8000
+local controlAngularImpulse = 9000
 local maxAngularVelocity = 4
 local boostImpulse = 500
 local chargeDrainPSec = 300
@@ -39,6 +39,8 @@ function Motorcycle:initialize( world )
 	
 	self:initializeBody( world )
 	
+	self._engine_on = true
+	
 	self.maxHealth = 500
 	self.health = 500
 	
@@ -53,9 +55,8 @@ function Motorcycle:initialize( world )
 	self._lastGroundContact = 0
 	self._trickstage = 0
 	self._resettrickstage =  0
-	self._tricktexts = { "SICKNASTY", "TOTALLY RAD", "AMAZING", "AWESOME", "RADICAL", "STUPENDOUS", "HOLY F@(#", "MAJESTIC", "11/10 - IGN",
-	"SICKNASTY", "TOTALLY RAD", "AMAZING", "AWESOME", "RADICAL", "STUPENDOUS", "HOLY F@(#", "MAJESTIC", "11/10 - IGN",
-	"MEH", "HELP I'M STUCK IN A TRICK SLANG TYPING FACTORY" }
+	self._tricktexts = { "SICKNASTY", "TOTALLY RAD", "AMAZING", "AWESOME", "RADICAL", "STUPENDOUS", "HOLY F@(#", "MAJESTIC", "11/10 - IGN", "SICK AIR TIME", "DUDE WHOA",
+	"BETTER THAN SEX", "MEH", "HELP I'M STUCK IN A WORD TYPING FACTORY" }
 	
 	-- initial push
 	self._body:applyLinearImpulse( 250, -230 )
@@ -160,7 +161,7 @@ function Motorcycle:initializeBody( world )
 	
 	self._body = love.physics.newBody(world, 0, 0, "dynamic")
 	self._body:setMass(30)
-	self._body:setGravityScale( 0.5 )
+	self._body:setGravityScale( 0.7 )
 	
 	self._shape = love.physics.newPolygonShape(-20, 10, 50, 10, 80, -20, 45, -28, -45, -20)
 	self._fixture = love.physics.newFixture(self._body, self._shape)
@@ -196,6 +197,18 @@ function Motorcycle:reset()
 	
 end
 
+function Motorcycle:balance()
+	
+	self._body:applyAngularImpulse( -3500 )
+	
+end
+
+function Motorcycle:turnEngineOff()
+	
+	self._engine_on = false
+	
+end
+
 function Motorcycle:setPos( x, y )
 
 	mixin.PhysicsActor.setPos( self, x, y )
@@ -205,14 +218,20 @@ end
 
 function Motorcycle:update( dt )
 	
-	self._wheelbody:applyTorque( wheelTorque * dt )
-	
-	if (input:keyIsDown("left")) then
-		self._body:applyAngularImpulse( -1 * controlAngularImpulse * dt )
+	if (self._engine_on) then
+		self._wheelbody:applyTorque( wheelTorque * dt )
 	end
 	
-	if (input:keyIsDown("right")) then
-		self._body:applyAngularImpulse( controlAngularImpulse * dt )
+	if (game.level_started) then
+	
+		if (input:keyIsDown("left")) then
+			self._body:applyAngularImpulse( -1 * controlAngularImpulse * dt )
+		end
+		
+		if (input:keyIsDown("right")) then
+			self._body:applyAngularImpulse( controlAngularImpulse * dt )
+		end
+		
 	end
 	
 	-- clamp angular velocity
@@ -243,7 +262,7 @@ function Motorcycle:update( dt )
 	end
 	
 	-- Boosting
-	if (input:keyIsPressed(" ") and self.charge == self.maxCharge) then
+	if (game.level_started and input:keyIsPressed(" ") and self.charge == self.maxCharge) then
 		self._sound_boost:play()
 		self._boost = true
 	end
@@ -311,7 +330,10 @@ function Motorcycle:draw()
 	love.graphics.translate(px, py)
 	love.graphics.rotate(self._body:getAngle())
 	
-	self._img_engine:draw(54 + math.random() * 2,  41+math.random() * 2)
+	local rx, ry = math.random() * 2, math.random() * 2
+	if (not self._engine_on) then rx, ry = 0, 0 end
+	
+	self._img_engine:draw(54 + rx,  41 + ry)
 	self._img_frame:draw(0, 0)
 	self._img_suspension:draw(10, 45)
 	
@@ -343,6 +365,13 @@ function Motorcycle:postSolveWith( other, contact, myFixture, otherFixture, self
 			self._psystem_sparks:setPosition( p1x, p1y )
 			self._psystem_sparks:start()
 			
+			local px, py = self:getPos()
+			if (math.abs(px - game.nextScoreX) < 10) then
+				game.nextScoreX = game.nextScoreX + 10
+			end
+				
+			self._trickstage = 0
+				
 			-- determine how many sparks to show
 			local nsparks = math.floor(Vector(self._body:getLinearVelocity()):length() / 50)
 			if (nsparks > 0) then
@@ -351,8 +380,6 @@ function Motorcycle:postSolveWith( other, contact, myFixture, otherFixture, self
 				self._psystem_smoke:setEmissionRate( math.floor(math.max(0, (self.maxHealth * 2/3) - self.health) / 30) )
 				
 				self._sound_hit:play()
-				
-				self._trickstage = 0
 				
 				if (self.health < self.maxHealth * 0.2) then
 					self._psystem_enginefire:start()

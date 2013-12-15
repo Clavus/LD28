@@ -13,7 +13,7 @@ function LostWheel:initialize( world )
 	
 	self:initializeBody( world )
 	
-	self._body:applyLinearImpulse( 20, -5 )
+	self._body:applyLinearImpulse( 35, -8 )
 	self._body:applyAngularImpulse( 1800 )
 	
 end

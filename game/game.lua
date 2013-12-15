@@ -7,10 +7,12 @@ function game.load()
 	gui = GUI()
 	level = Level(ldata, true)
 	level:setCollisionCallbacks(game.collisionBeginContact, game.collisionEndContact, game.collisionPreSolve, game.collisionPostSolve)
-
-	if (player) then
+	
+	timer.simple( 3, function()
 		level:getCamera():track( player, love.graphics.getWidth() / 5, -(love.graphics.getHeight() / 5) )
-	end
+	end)
+	
+	game.last_checkpoint = nil
 	
 	world = level:getPhysicsWorld()
 	world:setGravity(0, 300)
@@ -21,11 +23,16 @@ end
 
 function game.update( dt )
 
+	if (input:keyIsPressed("r") and game.last_checkpoint ~= nil) then
+		local cx, cy = game.last_checkpoint:getPos()
+		player:setPos(cx+32, cy+64)
+		player:reset()
+	end
+	
+	if (input:keyIsPressed("escape")) then love.event.quit() return end
+	
 	gui:update( dt )
 	level:update( dt )
-	
-	if (input:keyIsPressed("r")) then love.load() return end
-	if (input:keyIsPressed("escape")) then love.event.quit() return end
 	
 end
 
@@ -41,7 +48,11 @@ function game.draw()
 end
 
 -- is called by map trigger entities
-function game.handleTrigger( other, contact, trigger_type, ...)
+function game.handleTrigger( trigger, other, contact, trigger_type, ...)
+	
+	if (other == player and trigger_type == "checkpoint") then
+		game.last_checkpoint = trigger
+	end
 	
 end
 
@@ -59,16 +70,33 @@ function game.createLevelEntity( level, entData )
 		end
 		
 		ent:setPos(entData.x, entData.y)
+	
+	elseif entData.type == "Checkpoint" then
+	
+		ent = level:createEntity("Trigger", level:getPhysicsWorld(), { type = "checkpoint" })
+		if entData.w == nil then
+			ent:buildFromPolygon(entData.polygon)
+		else
+			ent:buildFromSquare(entData.w,entData.h)
+		end
+		
+		ent:setPos(entData.x, entData.y)
 		
 	elseif entData.type == "PlayerStart" then
 		
 		ent = level:createEntity("Motorcycle", level:getPhysicsWorld())
-		ent:setPos(entData.x, entData.y)
+		ent:setPos(entData.x - 200, entData.y)
 		
 		player = ent
 		
 		ent = level:createEntity("LostWheel", level:getPhysicsWorld())
-		ent:setPos(entData.x - 200, entData.y - 200)
+		ent:setPos(entData.x - 100, entData.y - 100)
+		
+	elseif entData.type == "CameraStart" then
+		
+		local camera = level:getCamera()
+		camera:moveTo( entData.x, entData.y, 0 )
+		print("Setting camera pos")
 		
 	end
 	

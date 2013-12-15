@@ -36,7 +36,9 @@ end
 
 function Level:isRectInActiveArea(campos, x, y, w, h)
 	
-	local camx = campos.x
+	return true
+	
+	--[[local camx = campos.x
 	local camy = campos.y
 	local camw = self._camera:getWidth()
 	local camh = self._camera:getHeight()
@@ -44,7 +46,7 @@ function Level:isRectInActiveArea(campos, x, y, w, h)
 	if (x > camx - camw - w and x < camx + camw*2 and
 		y > camy - camh - h and y < camy + camh*2) then
 		return true
-	end
+	end]]--
 	
 end
 

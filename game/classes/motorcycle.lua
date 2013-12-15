@@ -3,9 +3,10 @@ Motorcycle = class("Motorcycle", Entity)
 Motorcycle:include(mixin.PhysicsActor)
 Motorcycle:include(mixin.CollisionResolver)
 
+local wheel_x, wheel_y = -38, 38
 local wheelTorque = 700000
 local controlAngularImpulse = 8000
-local boostImpulse = 600
+local boostImpulse = 400
 local chargeDrainPSec = 300
 local chargeRegenPSec = 400
 local chargeRecoveryDelay = 3
@@ -36,17 +37,30 @@ function Motorcycle:initialize( world )
 	
 	self:initializeBody( world )
 	
+	self.maxHealth = 1000
+	self.health = 1000
+	
 	self.maxCharge = 100
 	self.charge = 100
 	self.chargeRegenStart = 0
 	
 	self._lastGroundContact = 0
+
+	-- initial push
+	self._body:applyLinearImpulse( 250, -230 )
 	
 	gui:addDynamicElement(0, Vector(0,0), function()
 		love.graphics.setColor( 100, 100, 100 )
-		love.graphics.rectangle( "fill", 0, 0, 200, 50 )
+		love.graphics.rectangle( "fill", 0, 0, 200, 30 )
+		love.graphics.setColor( 50, 250, 50 )
+		love.graphics.rectangle( "fill", 0, 0, 200 * (self.health / self.maxHealth), 30 )
+	end, "charge")
+	
+	gui:addDynamicElement(0, Vector(0,0), function()
+		love.graphics.setColor( 100, 100, 100 )
+		love.graphics.rectangle( "fill", 0, 40, 200, 30 )
 		love.graphics.setColor( 250, 50, 50 )
-		love.graphics.rectangle( "fill", 0, 0, 200 * (self.charge / self.maxCharge), 50 )
+		love.graphics.rectangle( "fill", 0, 40, 200 * (self.charge / self.maxCharge), 30 )
 	end, "charge")
 	
 	-- Create particle systems
@@ -72,7 +86,7 @@ function Motorcycle:initialize( world )
 	
 	system = love.graphics.newParticleSystem( resource.getImage(FOLDER.ASSETS.."spark.png"), 130 )
 	system:setOffset( 0, 0 )
-	system:setBufferSize( 2000 )
+	system:setBufferSize( 1000 )
 	system:setEmissionRate( 0 )
 	system:setEmitterLifetime( -1 )
 	system:setParticleLifetime( 1 )
@@ -90,11 +104,29 @@ function Motorcycle:initialize( world )
 	
 	self._psystem_sparks = system
 
+	system = love.graphics.newParticleSystem( resource.getImage(FOLDER.ASSETS.."smoke.png"), 20 )
+	system:setOffset( 0, 0 )
+	system:setBufferSize( 1000 )
+	system:setEmissionRate( 0 )
+	system:setEmitterLifetime( -1 )
+	system:setParticleLifetime( 5 )
+	system:setColors( 45, 45, 45, 180, 95, 95, 95, 3 )
+	system:setSizes( 0.5, 3, 1 )
+	system:setSpeed( 30, 80  )
+	system:setDirection( math.rad(230) )
+	system:setSpread( math.rad(60) )
+	system:setLinearAcceleration( 0, 0, 0, 0 )
+	system:setRotation( math.rad(0.2), math.rad(0.8) )
+	system:setSpin( math.rad(0.5), math.rad(2), 1 )
+	system:setRadialAcceleration( 0 )
+	system:setTangentialAcceleration( 0 )
+	system:start()
+	
+	self._psystem_smoke = system
+	
 end
 
 function Motorcycle:initializeBody( world )
-	
-	local wx, wy = -38, 38
 	
 	self._body = love.physics.newBody(world, 0, 0, "dynamic")
 	self._body:setMass(30)
@@ -104,7 +136,7 @@ function Motorcycle:initializeBody( world )
 	self._fixture = love.physics.newFixture(self._body, self._shape)
 	self._fixture:setUserData(self)
 	
-	self._wheelbody = love.physics.newBody(world, wx, wy, "dynamic")
+	self._wheelbody = love.physics.newBody(world, wheel_x, wheel_y, "dynamic")
 	self._wheelbody:setMass(10)
 	
 	self._wheelshape = love.physics.newCircleShape( 30 )
@@ -112,8 +144,26 @@ function Motorcycle:initializeBody( world )
 	self._wheelfixture:setFriction( 20 )
 	--self._wheelfixture:setUserData(self)
 	
-	self._joint = love.physics.newRevoluteJoint( self._body, self._wheelbody, wx, wy, false )
+	self._joint = love.physics.newRevoluteJoint( self._body, self._wheelbody, wheel_x, wheel_y, false )
 
+end
+
+function Motorcycle:reset()
+	
+	self._body:setLinearVelocity( 0, 0 )
+	self._body:setAngularVelocity( 0 )
+	self._body:setAngle( 0 )
+	
+	self._wheelbody:setLinearVelocity( 0, 0 )
+	self._wheelbody:setAngularVelocity( 10 )
+	
+end
+
+function Motorcycle:setPos( x, y )
+
+	mixin.PhysicsActor.setPos( self, x, y )
+	self._wheelbody:setPosition( x + wheel_x, y + wheel_y )
+	
 end
 
 function Motorcycle:update( dt )
@@ -128,12 +178,12 @@ function Motorcycle:update( dt )
 		self._body:applyAngularImpulse( controlAngularImpulse * dt )
 	end
 	
+	local body_ang = self._body:getAngle()
+	local bx, by = self._body:getPosition()
+		
 	if (input:keyIsDown(" ") and self.charge > 0) then
 	
 		-- Boost!
-		local body_ang = self._body:getAngle()
-		local bx, by = self._body:getPosition()
-		
 		local vec = angle.forward( body_ang - math.pi / 8 ) * (boostImpulse * dt)
 		self._body:applyLinearImpulse( vec.x, vec.y )
 		
@@ -164,8 +214,12 @@ function Motorcycle:update( dt )
 		
 	end
 	
+	local spos = Vector(20, 17):rotate(body_ang)
+	self._psystem_smoke:setPosition( bx + spos.x, by + spos.y )
+	
 	self._psystem_boost:update(dt)
 	self._psystem_sparks:update(dt)
+	self._psystem_smoke:update(dt)
 	
 end
 
@@ -189,6 +243,7 @@ function Motorcycle:draw()
 	
 	love.graphics.pop()
 	
+	love.graphics.draw(self._psystem_smoke, 0, 0)
 	love.graphics.draw(self._psystem_sparks, 0, 0)
 	
 	--love.graphics.circle("line", wx, wy, self._wheelshape:getRadius(), 32)
@@ -214,8 +269,9 @@ function Motorcycle:postSolveWith( other, contact, selfIsFirst )
 		-- determine how many sparks to show
 		local nsparks = math.floor(Vector(self._body:getLinearVelocity()):length() / 50)
 		if (nsparks > 0) then
-			print("sparks: "..nsparks)
 			self._psystem_sparks:emit( nsparks )
+			self.health = math.max(0, self.health - (nsparks / 10))
+			self._psystem_smoke:setEmissionRate( math.floor(math.max(0, (self.maxHealth * 2/3) - self.health) / 30) )
 		end
 		
 		self._lastGroundContact = engine.currentTime()

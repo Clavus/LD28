@@ -14,6 +14,7 @@ function love.load()
 	
 	-- Disable this on release, removes unnecessary asserts
 	--assertDebug = assert
+	_curTime, _prntcnt = 0, 0
 	
 	input = InputController()
 	game.load()

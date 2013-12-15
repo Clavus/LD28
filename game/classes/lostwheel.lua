@@ -13,7 +13,7 @@ function LostWheel:initialize( world )
 	
 	self:initializeBody( world )
 	
-	self._body:applyLinearImpulse( 100, 0 )
+	self._body:applyLinearImpulse( 20, -5 )
 	self._body:applyAngularImpulse( 1800 )
 	
 end
@@ -26,7 +26,7 @@ function LostWheel:initializeBody( world )
 	self._shape = love.physics.newCircleShape( 30 )
 	self._fixture = love.physics.newFixture(self._body, self._shape)
 	self._fixture:setFriction( 1 )
-	self._fixture:setRestitution( 0.8 )
+	self._fixture:setRestitution( 0.7 )
 	self._fixture:setUserData(self)
 	
 end
